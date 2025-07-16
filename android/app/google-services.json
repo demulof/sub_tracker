@@ -1,0 +1,29 @@
+{
+  "project_info": {
+    "project_number": "1050375587944",
+    "project_id": "sub-tracker-982e6",
+    "storage_bucket": "sub-tracker-982e6.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:1050375587944:android:3af0cf9ec9e7f4af1e93dd",
+        "android_client_info": {
+          "package_name": "com.example.sub_tracker"
+        }
+      },
+      "oauth_client": [],
+      "api_key": [
+        {
+          "current_key": "AIzaSyAnP6ZFwJSmGvcU_v_tXzEB8LZphWX5-NY"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": []
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}

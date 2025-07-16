@@ -1,0 +1,55 @@
+import 'package:flutter/material.dart';
+import 'models/subscription.dart';
+
+final List<Subscription> mockSubscriptions = [
+  Subscription(
+    id: '1',
+    name: 'Netflix',
+    plan: '高級方案',
+    amount: 390,
+    currency: 'TWD',
+    cycle: BillingCycle.monthly,
+    nextPaymentDate: DateTime.now().add(const Duration(days: 3)),
+    brandColor: Colors.red[700]!,
+  ),
+  Subscription(
+    id: '2',
+    name: 'Spotify',
+    plan: '個人方案',
+    amount: 149,
+    currency: 'TWD',
+    cycle: BillingCycle.monthly,
+    nextPaymentDate: DateTime.now().add(const Duration(days: 12)),
+    brandColor: Colors.green[600]!,
+  ),
+  Subscription(
+    id: '3',
+    name: 'Google',
+    plan: '2TB 方案',
+    amount: 330,
+    currency: 'TWD',
+    cycle: BillingCycle.monthly,
+    nextPaymentDate: DateTime.now().add(const Duration(days: 20)),
+    brandColor: Colors.blue[700]!,
+  ),
+  Subscription(
+    id: '4',
+    name: 'YouTube',
+    plan: '家庭方案',
+    amount: 399,
+    currency: 'TWD',
+    cycle: BillingCycle.monthly,
+    nextPaymentDate: DateTime.now().add(const Duration(days: 25)),
+    brandColor: Colors.red[900]!,
+  ),
+  Subscription(
+    id: '5',
+    name: 'Microsoft',
+    plan: '個人版',
+    amount: 2190,
+    currency: 'TWD',
+    cycle: BillingCycle.yearly,
+    nextPaymentDate: DateTime.now().add(const Duration(days: 45)),
+    brandColor: Colors.blueGrey[700]!,
+  ),
+];
