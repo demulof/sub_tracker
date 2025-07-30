@@ -5,10 +5,9 @@ import '../auth/auth_service.dart';
 import '../auth/app_user.dart';
 import '../auth/login_page.dart';
 import '../subscriptions/add_subscription_page.dart';
-// --- [修改] 移除多餘的 import，因為 mock_data.dart 已引入 Subscription 模型 ---
-// import '../../shared/models/subscription.dart';
-import '../../shared/mock_data.dart';
+import '../statistics/statistics_page.dart'; // <-- [新增] 引入統計頁面
 import '../../shared/models/subscription.dart';
+import '../../shared/mock_data.dart';
 
 class HomePage extends StatefulWidget {
   const HomePage({super.key});
@@ -21,7 +20,6 @@ class _HomePageState extends State<HomePage> {
   final AuthService _auth = AuthService();
   bool _isMonthlyView = true;
 
-  // 開啟新增訂閱頁面的方法
   void _showAddSubscriptionSheet() {
     showModalBottomSheet(
       context: context,
@@ -30,9 +28,19 @@ class _HomePageState extends State<HomePage> {
         borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
       ),
       builder: (context) {
-        return const AddSubscriptionPage();
+        return Container(
+          height: MediaQuery.of(context).size.height * 0.85,
+          child: const AddSubscriptionPage(),
+        );
       },
     );
+  }
+
+  // --- [新增] 導航至統計頁面的函式 ---
+  void _navigateToStatistics() {
+    Navigator.of(
+      context,
+    ).push(MaterialPageRoute(builder: (context) => const StatisticsPage()));
   }
 
   @override
@@ -67,7 +75,11 @@ class _HomePageState extends State<HomePage> {
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
                       const SizedBox(height: 16),
-                      _buildTotalSpendingCard(),
+                      // --- [修改] 將總支出卡片包裝在 GestureDetector 中 ---
+                      GestureDetector(
+                        onTap: _navigateToStatistics,
+                        child: _buildTotalSpendingCard(),
+                      ),
                       const SizedBox(height: 24),
                       _buildUpcomingPaymentsSection(upcomingPayments),
                       const SizedBox(height: 24),
