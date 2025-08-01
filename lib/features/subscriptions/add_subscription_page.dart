@@ -1,25 +1,16 @@
 // =================================================================
 // 檔案: lib/features/subscriptions/add_subscription_page.dart
-// (此檔案已更新，重構版面，僅讓快速新增區塊滾動)
+// (此檔案已更新，使用自訂對話框取代 DatePicker 以移除標頭)
 // =================================================================
 import 'package:flutter/material.dart';
+import 'package:intl/intl.dart';
+import '../../services/subscription_service.dart';
 import '../../shared/models/subscription.dart';
 
-// --- Data models and lists remain the same ---
-enum SubscriptionCategory {
-  video('影視'),
-  music('音樂'),
-  ai('AI 工具'),
-  productivity('生產力');
-
-  const SubscriptionCategory(this.displayName);
-  final String displayName;
-}
-
+// --- Data models for suggestions ---
 class Plan {
   final String name;
   final Map<String, double> prices;
-
   Plan({required this.name, required this.prices});
 }
 
@@ -29,7 +20,6 @@ class SubscriptionSuggestion {
   final Color brandColor;
   final List<Plan> plans;
   final SubscriptionCategory category;
-
   SubscriptionSuggestion({
     required this.name,
     required this.nativeCurrency,
@@ -39,6 +29,7 @@ class SubscriptionSuggestion {
   });
 }
 
+// --- Data list for suggestions ---
 final List<SubscriptionSuggestion> popularSuggestions = [
   SubscriptionSuggestion(
     name: 'Netflix',
@@ -175,12 +166,12 @@ final List<SubscriptionSuggestion> popularSuggestions = [
 
 class AddSubscriptionPage extends StatefulWidget {
   const AddSubscriptionPage({super.key});
-
   @override
   State<AddSubscriptionPage> createState() => _AddSubscriptionPageState();
 }
 
 class _AddSubscriptionPageState extends State<AddSubscriptionPage> {
+  final _subscriptionService = SubscriptionService();
   final _formKey = GlobalKey<FormState>();
 
   final _nameController = TextEditingController();
@@ -192,6 +183,7 @@ class _AddSubscriptionPageState extends State<AddSubscriptionPage> {
 
   Plan? _selectedPlan;
   SubscriptionCategory _selectedCategory = SubscriptionCategory.video;
+  bool _isLoading = false;
 
   @override
   void dispose() {
@@ -247,7 +239,7 @@ class _AddSubscriptionPageState extends State<AddSubscriptionPage> {
                     Navigator.of(context).pop();
                   },
                 );
-              }).toList(),
+              }),
             ],
           ),
         );
@@ -255,16 +247,59 @@ class _AddSubscriptionPageState extends State<AddSubscriptionPage> {
     );
   }
 
+  // --- [修改] 使用自訂的 Dialog 取代 showDatePicker ---
   Future<void> _pickDate() async {
-    final DateTime? picked = await showDatePicker(
+    DateTime? pickedDate = _selectedDate;
+    final DateTime? result = await showDialog<DateTime>(
       context: context,
-      initialDate: _selectedDate,
-      firstDate: DateTime(2000),
-      lastDate: DateTime(2101),
+      builder: (BuildContext context) {
+        return AlertDialog(
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(16),
+          ),
+          contentPadding: const EdgeInsets.all(0),
+          content: SizedBox(
+            height: 380, // 調整高度以容納按鈕
+            width: 320,
+            child: Column(
+              children: [
+                Expanded(
+                  child: CalendarDatePicker(
+                    initialDate: _selectedDate,
+                    firstDate: DateTime(2000),
+                    lastDate: DateTime(2101),
+                    onDateChanged: (DateTime date) {
+                      pickedDate = date;
+                    },
+                  ),
+                ),
+                Padding(
+                  padding: const EdgeInsets.only(right: 16.0, bottom: 8.0),
+                  child: Row(
+                    mainAxisAlignment: MainAxisAlignment.end,
+                    children: [
+                      TextButton(
+                        onPressed: () => Navigator.of(context).pop(null),
+                        child: const Text('取消'),
+                      ),
+                      const SizedBox(width: 8),
+                      TextButton(
+                        onPressed: () => Navigator.of(context).pop(pickedDate),
+                        child: const Text('確定'),
+                      ),
+                    ],
+                  ),
+                ),
+              ],
+            ),
+          ),
+        );
+      },
     );
-    if (picked != null && picked != _selectedDate) {
+
+    if (result != null && result != _selectedDate) {
       setState(() {
-        _selectedDate = picked;
+        _selectedDate = result;
       });
     }
   }
@@ -300,26 +335,54 @@ class _AddSubscriptionPageState extends State<AddSubscriptionPage> {
     );
   }
 
-  void _saveSubscription() {
+  Future<void> _saveSubscription() async {
     if (_formKey.currentState!.validate()) {
-      print('儲存的資料:');
-      print('名稱: ${_nameController.text}');
-      print('金額: ${_amountController.text}');
-      print('幣值: $_selectedCurrency');
-      print('週期: $_selectedCycle');
-      print('首次付款日: $_selectedDate');
+      setState(() => _isLoading = true);
 
-      Navigator.of(context).pop();
+      final suggestion = popularSuggestions.firstWhere(
+        (s) => s.name == _nameController.text,
+        orElse: () => SubscriptionSuggestion(
+          name: _nameController.text,
+          nativeCurrency: 'TWD',
+          brandColor: Colors.grey,
+          category: SubscriptionCategory.other,
+          plans: [],
+        ),
+      );
+
+      final newSubscription = Subscription(
+        id: '',
+        name: _nameController.text,
+        plan: _selectedPlan?.name ?? '自訂方案',
+        amount: double.parse(_amountController.text),
+        currency: _selectedCurrency,
+        cycle: _selectedCycle,
+        firstPaymentDate: _selectedDate,
+        brandColor: suggestion.brandColor,
+        category: suggestion.category,
+      );
+
+      try {
+        await _subscriptionService.addSubscription(newSubscription);
+        if (mounted) {
+          Navigator.of(context).pop();
+        }
+      } catch (e) {
+        if (mounted) {
+          ScaffoldMessenger.of(
+            context,
+          ).showSnackBar(const SnackBar(content: Text('儲存失敗，請稍後再試。')));
+          setState(() => _isLoading = false);
+        }
+      }
     }
   }
 
   @override
   Widget build(BuildContext context) {
-    // --- [修改] 將整體包裹在 SingleChildScrollView 中以應對鍵盤彈出 ---
     return SingleChildScrollView(
       child: Padding(
         padding: EdgeInsets.only(
-          // 確保內容在鍵盤上方
           bottom: MediaQuery.of(context).viewInsets.bottom,
           left: 16,
           right: 16,
@@ -328,10 +391,9 @@ class _AddSubscriptionPageState extends State<AddSubscriptionPage> {
         child: Form(
           key: _formKey,
           child: Column(
-            mainAxisSize: MainAxisSize.min, // 讓 Column 只佔用所需高度
+            mainAxisSize: MainAxisSize.min,
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              // --- 頂部固定區 ---
               Center(
                 child: Container(
                   width: 50,
@@ -352,10 +414,8 @@ class _AddSubscriptionPageState extends State<AddSubscriptionPage> {
               ),
               const SizedBox(height: 16),
 
-              // --- 中間可滾動區 ---
               _buildSuggestionsSection(),
 
-              // --- 底部固定區 ---
               const SizedBox(height: 20),
               _buildTextField(
                 controller: _nameController,
@@ -375,22 +435,29 @@ class _AddSubscriptionPageState extends State<AddSubscriptionPage> {
               SizedBox(
                 width: double.infinity,
                 child: ElevatedButton(
-                  onPressed: _saveSubscription,
+                  onPressed: _isLoading ? null : _saveSubscription,
                   style: ElevatedButton.styleFrom(
-                    backgroundColor: const Color(0xFF1A237E),
                     padding: const EdgeInsets.symmetric(vertical: 16),
                     shape: RoundedRectangleBorder(
                       borderRadius: BorderRadius.circular(16),
                     ),
                   ),
-                  child: const Text(
-                    '儲存訂閱',
-                    style: TextStyle(
-                      fontSize: 18,
-                      fontWeight: FontWeight.bold,
-                      color: Colors.white,
-                    ),
-                  ),
+                  child: _isLoading
+                      ? const SizedBox(
+                          height: 24,
+                          width: 24,
+                          child: CircularProgressIndicator(
+                            color: Colors.white,
+                            strokeWidth: 3,
+                          ),
+                        )
+                      : const Text(
+                          '儲存訂閱',
+                          style: TextStyle(
+                            fontSize: 18,
+                            fontWeight: FontWeight.bold,
+                          ),
+                        ),
                 ),
               ),
               const SizedBox(height: 8),
@@ -401,7 +468,6 @@ class _AddSubscriptionPageState extends State<AddSubscriptionPage> {
     );
   }
 
-  // --- [修改] 重構快速新增區塊，使其高度固定且內部可滾動 ---
   Widget _buildSuggestionsSection() {
     final filteredSuggestions = popularSuggestions
         .where((s) => s.category == _selectedCategory)
@@ -437,20 +503,13 @@ class _AddSubscriptionPageState extends State<AddSubscriptionPage> {
                     });
                   }
                 },
-                backgroundColor: Colors.grey[200],
-                selectedColor: const Color(0xFFFFC107).withAlpha(200),
-                labelStyle: TextStyle(
-                  fontWeight: isSelected ? FontWeight.bold : FontWeight.normal,
-                  color: isSelected ? const Color(0xFF1A237E) : Colors.black87,
-                ),
+                showCheckmark: false,
               );
             },
           ),
         ),
         const SizedBox(height: 12),
-        // 使用 SizedBox 固定 GridView 的高度
         SizedBox(
-          // 高度計算: (卡片高度 * 2) + 一行間距
           height: (80 * 2) + 12,
           child: GridView.builder(
             gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
@@ -589,7 +648,6 @@ class _AddSubscriptionPageState extends State<AddSubscriptionPage> {
                       const Icon(Icons.arrow_drop_down, size: 18),
                     ],
                   ),
-                  backgroundColor: Colors.grey[200],
                 ),
               ),
             ),
@@ -630,8 +688,6 @@ class _AddSubscriptionPageState extends State<AddSubscriptionPage> {
               });
             },
             borderRadius: BorderRadius.circular(12),
-            selectedColor: const Color(0xFF1A237E),
-            fillColor: const Color(0xFFFFC107).withAlpha(200),
             constraints: BoxConstraints(
               minHeight: 40.0,
               minWidth: (MediaQuery.of(context).size.width - 48) / 3,
@@ -667,10 +723,10 @@ class _AddSubscriptionPageState extends State<AddSubscriptionPage> {
               mainAxisAlignment: MainAxisAlignment.spaceBetween,
               children: [
                 Text(
-                  '${_selectedDate.year} / ${_selectedDate.month} / ${_selectedDate.day}',
+                  DateFormat('yyyy / MM / dd').format(_selectedDate),
                   style: const TextStyle(fontSize: 16),
                 ),
-                const Icon(Icons.calendar_today, color: Color(0xFF1A237E)),
+                const Icon(Icons.calendar_today),
               ],
             ),
           ),

@@ -1,4 +1,9 @@
+// =================================================================
+// 檔案: lib/features/auth/login_page.dart
+// (此檔案已更新，加入登入後自動合併本機資料的功能)
+// =================================================================
 import 'package:flutter/material.dart';
+import '../../services/subscription_service.dart';
 import 'auth_service.dart';
 
 class LoginPage extends StatefulWidget {
@@ -10,6 +15,8 @@ class LoginPage extends StatefulWidget {
 
 class _LoginPageState extends State<LoginPage> {
   final AuthService _auth = AuthService();
+  // --- [新增] 引入 SubscriptionService ---
+  final SubscriptionService _subscriptionService = SubscriptionService();
   final _formKey = GlobalKey<FormState>();
 
   bool _isLogin = true;
@@ -106,12 +113,18 @@ class _LoginPageState extends State<LoginPage> {
                     : SizedBox(
                         width: double.infinity,
                         child: ElevatedButton(
+                          // --- [修改] 登入/註冊按鈕的邏輯 ---
                           onPressed: () async {
                             if (_formKey.currentState!.validate()) {
                               setState(() {
                                 _isLoading = true;
                                 _error = '';
                               });
+
+                              // 1. 先檢查本地是否有資料
+                              final bool hadLocalData =
+                                  await _subscriptionService.hasLocalData();
+
                               dynamic result;
                               if (_isLogin) {
                                 result = await _auth.signInWithEmailAndPassword(
@@ -126,15 +139,23 @@ class _LoginPageState extends State<LoginPage> {
                                       _displayName,
                                     );
                               }
-                              // 如果成功，頁面會因 AuthWrapper 監聽而自動關閉
-                              // 如果失敗，則顯示錯誤訊息
-                              if (result == null && mounted) {
+
+                              if (result != null) {
+                                // 2. 如果登入/註冊成功，且之前有本地資料，則觸發合併
+                                if (hadLocalData) {
+                                  // 在背景執行合併，不影響 UI
+                                  _subscriptionService
+                                      .mergeLocalDataToFirestore();
+                                }
+                                if (mounted) {
+                                  Navigator.of(context).pop();
+                                }
+                              } else if (mounted) {
+                                // 3. 如果失敗，顯示錯誤訊息
                                 setState(() {
                                   _error = '發生錯誤，請檢查您的資訊。';
                                   _isLoading = false;
                                 });
-                              } else if (mounted) {
-                                Navigator.of(context).pop();
                               }
                             }
                           },

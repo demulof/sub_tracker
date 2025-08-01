@@ -1,13 +1,16 @@
+// =================================================================
+// 檔案: lib/features/home/home_page.dart
+// (此檔案已更新，修正了型別錯誤並優化了訪客模式的刷新邏輯)
+// =================================================================
+import 'dart:async';
 import 'package:flutter/material.dart';
-import 'dart:math';
-
 import '../auth/auth_service.dart';
 import '../auth/app_user.dart';
 import '../auth/login_page.dart';
 import '../subscriptions/add_subscription_page.dart';
-import '../statistics/statistics_page.dart'; // <-- [新增] 引入統計頁面
+import '../statistics/statistics_page.dart';
+import '../../services/subscription_service.dart';
 import '../../shared/models/subscription.dart';
-import '../../shared/mock_data.dart';
 
 class HomePage extends StatefulWidget {
   const HomePage({super.key});
@@ -18,7 +21,39 @@ class HomePage extends StatefulWidget {
 
 class _HomePageState extends State<HomePage> {
   final AuthService _auth = AuthService();
+  final SubscriptionService _subscriptionService = SubscriptionService();
   bool _isMonthlyView = true;
+
+  // --- [修改] 用於管理數據流的變數 ---
+  Stream<List<Subscription>>? _subscriptionStream;
+  StreamSubscription<AppUser?>?
+  _authSubscription; // <-- [修正] 型別從 User? 改為 AppUser?
+  AppUser? _currentUser; // <-- [新增] 用於追蹤目前使用者狀態
+
+  @override
+  void initState() {
+    super.initState();
+    // 監聽使用者登入狀態的變化
+    _authSubscription = _auth.user.listen((user) {
+      // <-- [修正] 取得 user 物件
+      // 當使用者登入或登出時，更新使用者狀態並重新建立訂閱數據的串流
+      if (mounted) {
+        setState(() {
+          _currentUser = user; // <-- [新增] 更新目前使用者
+          _subscriptionStream = _subscriptionService.getSubscriptions();
+        });
+      }
+    });
+    // 初始化第一次的數據串流
+    _subscriptionStream = _subscriptionService.getSubscriptions();
+  }
+
+  @override
+  void dispose() {
+    // 記得取消監聽以避免記憶體洩漏
+    _authSubscription?.cancel();
+    super.dispose();
+  }
 
   void _showAddSubscriptionSheet() {
     showModalBottomSheet(
@@ -29,45 +64,177 @@ class _HomePageState extends State<HomePage> {
       ),
       builder: (context) {
         return Container(
-          height: MediaQuery.of(context).size.height * 0.85,
+          height: MediaQuery.of(context).size.height * 0.9,
           child: const AddSubscriptionPage(),
         );
       },
-    );
+    ).then((_) {
+      // 為了讓訪客模式在新增後能刷新，我們需要一個新的 Stream 事件
+      // --- [修正] 判斷是否為訪客 (currentUser == null) ---
+      if (_currentUser == null) {
+        setState(() {
+          // 重新觸發 Stream.fromFuture 以取得最新的本機資料
+          _subscriptionStream = _subscriptionService.getSubscriptions();
+        });
+      }
+    });
   }
 
-  // --- [新增] 導航至統計頁面的函式 ---
   void _navigateToStatistics() {
     Navigator.of(
       context,
     ).push(MaterialPageRoute(builder: (context) => const StatisticsPage()));
   }
 
+  DateTime _calculateNextPaymentDate(
+    DateTime firstPayment,
+    BillingCycle cycle,
+  ) {
+    DateTime now = DateTime.now();
+    DateTime nextPayment = firstPayment;
+
+    if (nextPayment.isAfter(now)) {
+      return nextPayment;
+    }
+
+    switch (cycle) {
+      case BillingCycle.monthly:
+        while (nextPayment.isBefore(now)) {
+          nextPayment = DateTime(
+            nextPayment.year,
+            nextPayment.month + 1,
+            nextPayment.day,
+          );
+        }
+        break;
+      case BillingCycle.quarterly:
+        while (nextPayment.isBefore(now)) {
+          nextPayment = DateTime(
+            nextPayment.year,
+            nextPayment.month + 3,
+            nextPayment.day,
+          );
+        }
+        break;
+      case BillingCycle.yearly:
+        while (nextPayment.isBefore(now)) {
+          nextPayment = DateTime(
+            nextPayment.year + 1,
+            nextPayment.month,
+            nextPayment.day,
+          );
+        }
+        break;
+    }
+    return nextPayment;
+  }
+
+  List<Subscription> _filterSubsForMonth(
+    List<Subscription> allSubs,
+    DateTime month,
+  ) {
+    return allSubs.where((sub) {
+      final firstPayment = sub.firstPaymentDate;
+      return firstPayment.year < month.year ||
+          (firstPayment.year == month.year &&
+              firstPayment.month <= month.month);
+    }).toList();
+  }
+
+  double _calculateTotalSpending(List<Subscription> subs, bool isMonthly) {
+    double total = 0;
+    for (var sub in subs) {
+      double monthlyAmount;
+      switch (sub.cycle) {
+        case BillingCycle.monthly:
+          monthlyAmount = sub.amount;
+          break;
+        case BillingCycle.quarterly:
+          monthlyAmount = sub.amount / 3;
+          break;
+        case BillingCycle.yearly:
+          monthlyAmount = sub.amount / 12;
+          break;
+      }
+
+      if (isMonthly) {
+        total += monthlyAmount;
+      } else {
+        total += monthlyAmount * 12;
+      }
+    }
+    return total;
+  }
+
   @override
   Widget build(BuildContext context) {
-    return StreamBuilder<AppUser?>(
-      stream: _auth.user,
-      builder: (context, snapshot) {
-        final AppUser? currentUser = snapshot.data;
+    return StreamBuilder<List<Subscription>>(
+      stream: _subscriptionStream,
+      builder: (context, subscriptionSnapshot) {
+        if (subscriptionSnapshot.connectionState == ConnectionState.waiting &&
+            (subscriptionSnapshot.data == null ||
+                subscriptionSnapshot.data!.isEmpty)) {
+          return const Scaffold(
+            body: Center(child: CircularProgressIndicator()),
+          );
+        }
+
+        final subscriptions = subscriptionSnapshot.data ?? [];
+        final now = DateTime.now();
 
         final upcomingPayments =
-            mockSubscriptions
-                .where((s) => s.nextPaymentDate.isAfter(DateTime.now()))
+            subscriptions
+                .map((sub) {
+                  return MapEntry(
+                    sub,
+                    _calculateNextPaymentDate(sub.firstPaymentDate, sub.cycle),
+                  );
+                })
+                .where((entry) {
+                  return entry.value.isAfter(now) &&
+                      entry.value.difference(now).inDays <= 30;
+                })
                 .toList()
-              ..sort((a, b) => a.nextPaymentDate.compareTo(b.nextPaymentDate));
+              ..sort((a, b) => a.value.compareTo(b.value));
+
+        double currentSpending;
+        double previousSpending;
+
+        if (_isMonthlyView) {
+          final currentMonthSubs = _filterSubsForMonth(subscriptions, now);
+          currentSpending = _calculateTotalSpending(currentMonthSubs, true);
+
+          final lastMonth = DateTime(now.year, now.month - 1);
+          final lastMonthSubs = _filterSubsForMonth(subscriptions, lastMonth);
+          previousSpending = _calculateTotalSpending(lastMonthSubs, true);
+        } else {
+          final currentYearSubs = _filterSubsForMonth(
+            subscriptions,
+            DateTime(now.year, 12),
+          );
+          currentSpending = _calculateTotalSpending(currentYearSubs, false);
+
+          final lastYear = DateTime(now.year - 1, 12);
+          final lastYearSubs = _filterSubsForMonth(subscriptions, lastYear);
+          previousSpending = _calculateTotalSpending(lastYearSubs, false);
+        }
+
+        final difference = currentSpending - previousSpending;
 
         return Scaffold(
           floatingActionButton: FloatingActionButton(
             onPressed: _showAddSubscriptionSheet,
-            backgroundColor: const Color(0xFFFFC107),
-            shape: const RoundedRectangleBorder(
-              borderRadius: BorderRadius.all(Radius.circular(16)),
+            backgroundColor: Theme.of(context).colorScheme.secondary,
+            child: Icon(
+              Icons.add,
+              color: Theme.of(context).colorScheme.onSecondary,
+              size: 32,
             ),
-            child: const Icon(Icons.add, color: Color(0xFF1A237E), size: 32),
           ),
           body: CustomScrollView(
             slivers: [
-              _buildAppBar(context, currentUser),
+              // AppBar 會使用最新的 _currentUser 狀態
+              _buildAppBar(context, _currentUser),
               SliverToBoxAdapter(
                 child: Padding(
                   padding: const EdgeInsets.symmetric(horizontal: 24.0),
@@ -75,15 +242,17 @@ class _HomePageState extends State<HomePage> {
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
                       const SizedBox(height: 16),
-                      // --- [修改] 將總支出卡片包裝在 GestureDetector 中 ---
                       GestureDetector(
                         onTap: _navigateToStatistics,
-                        child: _buildTotalSpendingCard(),
+                        child: _buildTotalSpendingCard(
+                          currentSpending,
+                          difference,
+                        ),
                       ),
                       const SizedBox(height: 24),
                       _buildUpcomingPaymentsSection(upcomingPayments),
                       const SizedBox(height: 24),
-                      _buildAllSubscriptionsSection(),
+                      _buildAllSubscriptionsSection(subscriptions),
                       const SizedBox(height: 100),
                     ],
                   ),
@@ -108,7 +277,7 @@ class _HomePageState extends State<HomePage> {
 
     return SliverAppBar(
       pinned: true,
-      backgroundColor: const Color(0xFFF8FAFC).withAlpha(204),
+      backgroundColor: Theme.of(context).scaffoldBackgroundColor.withAlpha(204),
       flexibleSpace: FlexibleSpaceBar(
         titlePadding: const EdgeInsets.symmetric(horizontal: 24, vertical: 16),
         title: Row(
@@ -181,19 +350,22 @@ class _HomePageState extends State<HomePage> {
     );
   }
 
-  Widget _buildTotalSpendingCard() {
+  Widget _buildTotalSpendingCard(double total, double diff) {
     return Container(
       padding: const EdgeInsets.all(24),
       decoration: BoxDecoration(
-        gradient: const LinearGradient(
+        gradient: LinearGradient(
           begin: Alignment.topLeft,
           end: Alignment.bottomRight,
-          colors: [Color(0xFF1A237E), Color(0xFF303F9F)],
+          colors: [
+            const Color(0xFF1A237E),
+            Theme.of(context).colorScheme.primary,
+          ],
         ),
         borderRadius: BorderRadius.circular(24),
         boxShadow: [
           BoxShadow(
-            color: const Color(0xFF303F9F).withAlpha(102),
+            color: Theme.of(context).colorScheme.primary.withAlpha(102),
             blurRadius: 20,
             offset: const Offset(0, 10),
           ),
@@ -258,7 +430,7 @@ class _HomePageState extends State<HomePage> {
           ),
           const SizedBox(height: 16),
           Text(
-            _isMonthlyView ? 'NT\$ 1,318' : 'NT\$ 3,508',
+            'NT\$ ${total.toInt()}',
             style: const TextStyle(
               color: Colors.white,
               fontSize: 36,
@@ -267,7 +439,7 @@ class _HomePageState extends State<HomePage> {
           ),
           const SizedBox(height: 4),
           Text(
-            _isMonthlyView ? '比上個月多 NT\$ 150' : '比去年少 NT\$ 500',
+            '比上期${diff >= 0 ? "多" : "少"} NT\$ ${diff.abs().toInt()}',
             style: const TextStyle(color: Colors.white70, fontSize: 14),
           ),
         ],
@@ -297,7 +469,12 @@ class _HomePageState extends State<HomePage> {
     );
   }
 
-  Widget _buildUpcomingPaymentsSection(List<Subscription> upcomingPayments) {
+  Widget _buildUpcomingPaymentsSection(
+    List<MapEntry<Subscription, DateTime>> upcomingPayments,
+  ) {
+    if (upcomingPayments.isEmpty) {
+      return const SizedBox.shrink();
+    }
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
@@ -313,10 +490,11 @@ class _HomePageState extends State<HomePage> {
           child: ListView.separated(
             clipBehavior: Clip.none,
             scrollDirection: Axis.horizontal,
-            itemCount: min(3, upcomingPayments.length),
+            itemCount: upcomingPayments.length,
             separatorBuilder: (context, index) => const SizedBox(width: 16),
             itemBuilder: (context, index) {
-              return _buildUpcomingPaymentCard(upcomingPayments[index]);
+              final entry = upcomingPayments[index];
+              return _buildUpcomingPaymentCard(entry.key, entry.value);
             },
           ),
         ),
@@ -324,10 +502,8 @@ class _HomePageState extends State<HomePage> {
     );
   }
 
-  Widget _buildUpcomingPaymentCard(Subscription sub) {
-    final daysUntilPayment = sub.nextPaymentDate
-        .difference(DateTime.now())
-        .inDays;
+  Widget _buildUpcomingPaymentCard(Subscription sub, DateTime nextPaymentDate) {
+    final daysUntilPayment = nextPaymentDate.difference(DateTime.now()).inDays;
     final Color indicatorColor;
     if (daysUntilPayment <= 3) {
       indicatorColor = Colors.red;
@@ -401,7 +577,18 @@ class _HomePageState extends State<HomePage> {
     );
   }
 
-  Widget _buildAllSubscriptionsSection() {
+  Widget _buildAllSubscriptionsSection(List<Subscription> subscriptions) {
+    if (subscriptions.isEmpty) {
+      return const Center(
+        child: Padding(
+          padding: EdgeInsets.symmetric(vertical: 48.0),
+          child: Text(
+            '點擊右下角按鈕新增您的第一筆訂閱',
+            style: TextStyle(fontSize: 16, color: Colors.grey),
+          ),
+        ),
+      );
+    }
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
@@ -416,9 +603,9 @@ class _HomePageState extends State<HomePage> {
           padding: EdgeInsets.zero,
           shrinkWrap: true,
           physics: const NeverScrollableScrollPhysics(),
-          itemCount: mockSubscriptions.length,
+          itemCount: subscriptions.length,
           itemBuilder: (context, index) {
-            return _buildSubscriptionListItem(mockSubscriptions[index]);
+            return _buildSubscriptionListItem(subscriptions[index]);
           },
           separatorBuilder: (context, index) => const SizedBox(height: 12),
         ),
@@ -463,7 +650,7 @@ class _HomePageState extends State<HomePage> {
             crossAxisAlignment: CrossAxisAlignment.end,
             children: [
               Text(
-                'NT\$ ${sub.amount.toInt()}',
+                '${sub.currency} ${sub.amount.toInt()}',
                 style: const TextStyle(
                   fontWeight: FontWeight.bold,
                   fontSize: 18,
@@ -471,7 +658,9 @@ class _HomePageState extends State<HomePage> {
                 ),
               ),
               Text(
-                sub.cycle == BillingCycle.monthly ? '/ 月' : '/ 年',
+                sub.cycle == BillingCycle.monthly
+                    ? '/ 月'
+                    : (sub.cycle == BillingCycle.quarterly ? '/ 季' : '/ 年'),
                 style: TextStyle(color: Colors.grey[600]),
               ),
             ],
