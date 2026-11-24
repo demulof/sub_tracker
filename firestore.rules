@@ -1,0 +1,70 @@
+rules_version = '2';
+
+// 訂閱管家 Firestore 安全規則
+// 原則：每位使用者只能讀寫自己的資料；寫入時檢查欄位與數值範圍；其他路徑一律拒絕。
+// 欄位限制與 lib/shared/models/subscription.dart 的 SubscriptionLimits 相同，修改時兩邊要一起改。
+// 部署：firebase deploy --only firestore:rules
+
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    function isOwner(uid) {
+      return request.auth != null && request.auth.uid == uid;
+    }
+
+    function isShortString(value, minLen, maxLen) {
+      return value is string && value.size() >= minLen && value.size() <= maxLen;
+    }
+
+    // users/{uid}：只存顯示名稱與建立時間（Email 由 Firebase Auth 保管，不重複存）
+    function isValidUser() {
+      let data = request.resource.data;
+      return data.keys().hasOnly(['displayName', 'createdAt'])
+        && data.keys().hasAll(['displayName', 'createdAt'])
+        && isShortString(data.displayName, 1, 30)
+        && data.createdAt is timestamp;
+    }
+
+    // users/{uid}/subscriptions/{subId}
+    function isValidSubscription(subId) {
+      let data = request.resource.data;
+      return data.keys().hasOnly([
+          'id', 'name', 'plan', 'amount', 'currency', 'cycle',
+          'firstPaymentDate', 'endDate', 'brandColor', 'category'
+        ])
+        && data.keys().hasAll([
+          'id', 'name', 'plan', 'amount', 'currency', 'cycle',
+          'firstPaymentDate', 'brandColor', 'category'
+        ])
+        && data.id == subId
+        && isShortString(data.name, 1, 50)
+        && isShortString(data.plan, 0, 50)
+        && data.amount is number && data.amount > 0 && data.amount <= 10000000
+        && data.currency in ['TWD', 'USD', 'JPY']
+        && data.cycle in ['monthly', 'quarterly', 'yearly']
+        && data.category in ['video', 'music', 'ai', 'productivity', 'other']
+        && data.firstPaymentDate is timestamp
+        && (!('endDate' in data) || data.endDate == null
+            || (data.endDate is timestamp && data.endDate > data.firstPaymentDate))
+        && data.brandColor is int && data.brandColor >= 0 && data.brandColor <= 4294967295;
+    }
+
+    match /users/{uid} {
+      allow read, delete: if isOwner(uid);
+      allow create: if isOwner(uid) && isValidUser()
+        && request.resource.data.createdAt == request.time;
+      allow update: if isOwner(uid) && isValidUser()
+        && request.resource.data.createdAt == resource.data.createdAt;
+
+      match /subscriptions/{subId} {
+        allow read, delete: if isOwner(uid);
+        allow create, update: if isOwner(uid) && isValidSubscription(subId);
+      }
+    }
+
+    // 其他所有路徑一律拒絕
+    match /{document=**} {
+      allow read, write: if false;
+    }
+  }
+}

@@ -1,7 +1,13 @@
 class AppUser {
   final String uid;
   final String email;
-  String displayName;
+  final String displayName;
+  final bool emailVerified;
 
-  AppUser({required this.uid, required this.email, required this.displayName});
+  const AppUser({
+    required this.uid,
+    required this.email,
+    required this.displayName,
+    required this.emailVerified,
+  });
 }
