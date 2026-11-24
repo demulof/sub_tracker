@@ -1,14 +1,21 @@
-import 'package:flutter/material.dart';
 import 'package:firebase_core/firebase_core.dart';
-import 'package:google_fonts/google_fonts.dart';
+import 'package:flutter/material.dart';
 import 'package:flutter_localizations/flutter_localizations.dart';
+import 'package:google_fonts/google_fonts.dart';
+import 'package:intl/date_symbol_data_local.dart';
 
+import 'config/app_config.dart';
 import 'features/home/home_page.dart';
+import 'firebase_options.dart';
+import 'services/exchange_rate_service.dart';
 import 'shared/no_glow_scroll_behavior.dart';
 
-void main() async {
+Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
-  await Firebase.initializeApp();
+  await Firebase.initializeApp(options: DefaultFirebaseOptions.currentPlatform);
+  await initializeDateFormatting('zh_TW');
+  // 匯率在背景載入，不阻擋 app 啟動。
+  ExchangeRateService.instance.init();
   runApp(const SubscriptionApp());
 }
 
@@ -18,7 +25,7 @@ class SubscriptionApp extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return MaterialApp(
-      title: '訂閱管家',
+      title: AppConfig.appName,
       scrollBehavior: NoGlowScrollBehavior(),
       theme: ThemeData(
         colorScheme: ColorScheme.fromSeed(
@@ -29,7 +36,7 @@ class SubscriptionApp extends StatelessWidget {
           onPrimary: Colors.white,
           onSecondary: const Color(0xFF1A237E),
         ),
-        scaffoldBackgroundColor: const Color(0xFFF8FAFC), // 這是設定 App 背景色的正確方式
+        scaffoldBackgroundColor: const Color(0xFFF8FAFC),
         fontFamily: GoogleFonts.notoSansTc().fontFamily,
         appBarTheme: const AppBarTheme(
           backgroundColor: Colors.transparent,
@@ -45,13 +52,9 @@ class SubscriptionApp extends StatelessWidget {
         textButtonTheme: TextButtonThemeData(
           style: TextButton.styleFrom(foregroundColor: const Color(0xFF303F9F)),
         ),
-        // --- [修正] 使用 chipTheme 來設定 ActionChip 的樣式 ---
         chipTheme: ChipThemeData(
           backgroundColor: Colors.grey[200],
-          labelStyle: const TextStyle(
-            color: Colors.black87,
-            fontWeight: FontWeight.normal,
-          ),
+          labelStyle: const TextStyle(color: Colors.black87),
           iconTheme: const IconThemeData(color: Colors.black54, size: 16),
         ),
       ),

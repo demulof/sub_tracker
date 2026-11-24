@@ -1,5 +1,5 @@
 name: sub_tracker
-description: "A new Flutter project."
+description: "訂閱管家：記錄與統計各項訂閱服務的支出。"
 
 publish_to: 'none' # Remove this line if you wish to publish to pub.dev
 
@@ -26,6 +26,8 @@ dependencies:
     sdk: flutter
   shared_preferences: ^2.5.3
   uuid: ^4.5.1
+  http: ^1.2.2
+  url_launcher: ^6.3.1
 
 dev_dependencies:
   flutter_test:

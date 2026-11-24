@@ -43,3 +43,8 @@ app.*.map.json
 /android/app/debug
 /android/app/profile
 /android/app/release
+
+# Android 上架簽章金鑰（絕對不要提交到 git）
+/android/key.properties
+*.jks
+*.keystore

@@ -1,466 +1,192 @@
-// =================================================================
-// 檔案: lib/features/subscriptions/add_subscription_page.dart
-// (此檔案已更新，使用自訂對話框取代 DatePicker 以移除標頭)
-// =================================================================
+import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:flutter/material.dart';
-import 'package:intl/intl.dart';
+import 'package:flutter/services.dart';
+
 import '../../services/subscription_service.dart';
+import '../../shared/format.dart';
 import '../../shared/models/subscription.dart';
+import '../../shared/widgets/brand_icon.dart';
+import 'suggestions.dart';
 
-// --- Data models for suggestions ---
-class Plan {
-  final String name;
-  final Map<String, double> prices;
-  Plan({required this.name, required this.prices});
-}
-
-class SubscriptionSuggestion {
-  final String name;
-  final String nativeCurrency;
-  final Color brandColor;
-  final List<Plan> plans;
-  final SubscriptionCategory category;
-  SubscriptionSuggestion({
-    required this.name,
-    required this.nativeCurrency,
-    required this.brandColor,
-    required this.plans,
-    required this.category,
-  });
-}
-
-// --- Data list for suggestions ---
-final List<SubscriptionSuggestion> popularSuggestions = [
-  SubscriptionSuggestion(
-    name: 'Netflix',
-    nativeCurrency: 'TWD',
-    brandColor: const Color(0xFFE50914),
-    category: SubscriptionCategory.video,
-    plans: [
-      Plan(name: '基本', prices: {'TWD': 270, 'USD': 6.99}),
-      Plan(name: '標準', prices: {'TWD': 330, 'USD': 10.99}),
-      Plan(name: '高級', prices: {'TWD': 390, 'USD': 15.99}),
-    ],
-  ),
-  SubscriptionSuggestion(
-    name: 'Disney+',
-    nativeCurrency: 'TWD',
-    brandColor: const Color(0xFF113CCF),
-    category: SubscriptionCategory.video,
-    plans: [
-      Plan(name: '標準方案', prices: {'TWD': 270}),
-      Plan(name: '高級方案', prices: {'TWD': 320}),
-    ],
-  ),
-  SubscriptionSuggestion(
-    name: 'YouTube',
-    nativeCurrency: 'TWD',
-    brandColor: const Color(0xFFFF0000),
-    category: SubscriptionCategory.video,
-    plans: [
-      Plan(name: 'Premium 個人', prices: {'TWD': 199, 'USD': 7.99}),
-      Plan(name: 'Premium 家庭', prices: {'TWD': 399, 'USD': 14.99}),
-    ],
-  ),
-  SubscriptionSuggestion(
-    name: '動畫瘋',
-    nativeCurrency: 'TWD',
-    brandColor: const Color(0xFF00A2E8),
-    category: SubscriptionCategory.video,
-    plans: [
-      Plan(name: '月費方案', prices: {'TWD': 99}),
-      Plan(name: '年費方案', prices: {'TWD': 990}),
-    ],
-  ),
-  SubscriptionSuggestion(
-    name: 'Spotify',
-    nativeCurrency: 'TWD',
-    brandColor: const Color(0xFF1DB954),
-    category: SubscriptionCategory.music,
-    plans: [
-      Plan(name: 'Individual', prices: {'TWD': 149, 'USD': 5.99}),
-      Plan(name: 'Duo', prices: {'TWD': 198, 'USD': 7.99}),
-      Plan(name: 'Family', prices: {'TWD': 268, 'USD': 9.99}),
-    ],
-  ),
-  SubscriptionSuggestion(
-    name: 'KKBOX',
-    nativeCurrency: 'TWD',
-    brandColor: Colors.cyan[600]!,
-    category: SubscriptionCategory.music,
-    plans: [
-      Plan(name: '標準音質', prices: {'TWD': 149}),
-      Plan(name: '無損音質', prices: {'TWD': 299}),
-    ],
-  ),
-  SubscriptionSuggestion(
-    name: 'Apple Music',
-    nativeCurrency: 'TWD',
-    brandColor: const Color(0xFFFC3C44),
-    category: SubscriptionCategory.music,
-    plans: [
-      Plan(name: '個人方案', prices: {'TWD': 165, 'USD': 10.99}),
-      Plan(name: '家庭方案', prices: {'TWD': 265, 'USD': 16.99}),
-    ],
-  ),
-  SubscriptionSuggestion(
-    name: 'ChatGPT',
-    nativeCurrency: 'USD',
-    brandColor: const Color(0xFF74AA9C),
-    category: SubscriptionCategory.ai,
-    plans: [
-      Plan(name: 'Plus', prices: {'USD': 20}),
-    ],
-  ),
-  SubscriptionSuggestion(
-    name: 'Gemini',
-    nativeCurrency: 'USD',
-    brandColor: const Color(0xFF8E44AD),
-    category: SubscriptionCategory.ai,
-    plans: [
-      Plan(name: 'Advanced', prices: {'USD': 19.99}),
-    ],
-  ),
-  SubscriptionSuggestion(
-    name: 'Claude',
-    nativeCurrency: 'USD',
-    brandColor: const Color(0xFFD97757),
-    category: SubscriptionCategory.ai,
-    plans: [
-      Plan(name: 'Pro', prices: {'USD': 20}),
-    ],
-  ),
-  SubscriptionSuggestion(
-    name: 'Microsoft 365',
-    nativeCurrency: 'TWD',
-    brandColor: const Color(0xFF0078D4),
-    category: SubscriptionCategory.productivity,
-    plans: [
-      Plan(name: '個人版', prices: {'TWD': 219, 'USD': 6.99}),
-      Plan(name: '家用版', prices: {'TWD': 320, 'USD': 9.99}),
-    ],
-  ),
-  SubscriptionSuggestion(
-    name: 'Google One',
-    nativeCurrency: 'TWD',
-    brandColor: Colors.blue[700]!,
-    category: SubscriptionCategory.productivity,
-    plans: [
-      Plan(name: '100 GB', prices: {'TWD': 65}),
-      Plan(name: '200 GB', prices: {'TWD': 90}),
-      Plan(name: '2 TB', prices: {'TWD': 330}),
-    ],
-  ),
-  SubscriptionSuggestion(
-    name: 'iCloud+',
-    nativeCurrency: 'TWD',
-    brandColor: Colors.indigo[300]!,
-    category: SubscriptionCategory.productivity,
-    plans: [
-      Plan(name: '50 GB', prices: {'TWD': 30}),
-      Plan(name: '200 GB', prices: {'TWD': 90}),
-      Plan(name: '2 TB', prices: {'TWD': 300}),
-    ],
-  ),
-];
-
+/// 新增或編輯訂閱。傳入 [existing] 時為編輯模式（可修改、停止訂閱、刪除）。
 class AddSubscriptionPage extends StatefulWidget {
-  const AddSubscriptionPage({super.key});
+  const AddSubscriptionPage({super.key, this.existing});
+
+  final Subscription? existing;
+
   @override
   State<AddSubscriptionPage> createState() => _AddSubscriptionPageState();
 }
 
 class _AddSubscriptionPageState extends State<AddSubscriptionPage> {
-  final _subscriptionService = SubscriptionService();
+  final _service = SubscriptionService.instance;
   final _formKey = GlobalKey<FormState>();
 
   final _nameController = TextEditingController();
+  final _planController = TextEditingController();
   final _amountController = TextEditingController();
-  BillingCycle _selectedCycle = BillingCycle.monthly;
-  DateTime _selectedDate = DateTime.now();
-  String _selectedCurrency = 'TWD';
-  final List<String> _currencies = ['TWD', 'USD', 'JPY'];
 
+  BillingCycle _cycle = BillingCycle.monthly;
+  DateTime _firstPaymentDate = dateOnly(DateTime.now());
+  String _currency = 'TWD';
+  SubscriptionCategory _category = SubscriptionCategory.video;
+  bool _isEnded = false;
+  DateTime _endDate = dateOnly(DateTime.now());
   Plan? _selectedPlan;
-  SubscriptionCategory _selectedCategory = SubscriptionCategory.video;
-  bool _isLoading = false;
+  bool _isSaving = false;
+
+  bool get _isEditing => widget.existing != null;
+
+  @override
+  void initState() {
+    super.initState();
+    final sub = widget.existing;
+    if (sub != null) {
+      _nameController.text = sub.name;
+      _planController.text = sub.plan;
+      _amountController.text = amountToInput(sub.amount);
+      _cycle = sub.cycle;
+      _firstPaymentDate = sub.firstPaymentDate;
+      _currency = sub.currency;
+      _category = sub.category;
+      _isEnded = sub.endDate != null;
+      _endDate = sub.endDate ?? dateOnly(DateTime.now());
+    }
+  }
 
   @override
   void dispose() {
     _nameController.dispose();
+    _planController.dispose();
     _amountController.dispose();
     super.dispose();
   }
 
-  void _applySuggestion(
-    SubscriptionSuggestion suggestion,
-    Plan plan,
-    String currency,
-  ) {
+  SubscriptionSuggestion? _matchSuggestion(String name) {
+    final key = name.trim().toLowerCase();
+    for (final s in popularSuggestions) {
+      if (s.name.toLowerCase() == key) return s;
+    }
+    return null;
+  }
+
+  void _applySuggestion(SubscriptionSuggestion s, Plan plan, String currency) {
     setState(() {
       _selectedPlan = plan;
-      _nameController.text = suggestion.name;
-      _amountController.text = plan.prices[currency]!
-          .toStringAsFixed(2)
-          .replaceAll(RegExp(r'\.00$'), '');
-      _selectedCurrency = currency;
+      _nameController.text = s.name;
+      _planController.text = plan.name;
+      _amountController.text = amountToInput(plan.prices[currency]!);
+      _currency = currency;
+      _category = s.category;
     });
   }
 
+  // ------------------------------------------------------------ 選擇器
+
   void _showPlanPicker(SubscriptionSuggestion suggestion) {
-    showModalBottomSheet(
+    showModalBottomSheet<void>(
       context: context,
-      builder: (context) {
-        return SafeArea(
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              Padding(
-                padding: const EdgeInsets.all(16.0),
-                child: Text(
-                  '選擇 ${suggestion.name} 的方案',
-                  style: Theme.of(context).textTheme.titleLarge,
-                ),
+      builder: (context) => SafeArea(
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Padding(
+              padding: const EdgeInsets.all(16),
+              child: Text(
+                '選擇 ${suggestion.name} 的方案',
+                style: Theme.of(context).textTheme.titleLarge,
               ),
-              ...suggestion.plans.map((plan) {
-                final currencyToShow =
-                    plan.prices.containsKey(_selectedCurrency)
-                    ? _selectedCurrency
-                    : suggestion.nativeCurrency;
-                final priceToShow = plan.prices[currencyToShow];
-
-                return ListTile(
-                  title: Text(plan.name),
-                  trailing: Text(
-                    '$currencyToShow ${priceToShow!.toStringAsFixed(2).replaceAll(RegExp(r'\.00$'), '')}',
-                  ),
-                  onTap: () {
-                    _applySuggestion(suggestion, plan, currencyToShow);
-                    Navigator.of(context).pop();
-                  },
-                );
-              }),
-            ],
-          ),
-        );
-      },
-    );
-  }
-
-  // --- [修改] 使用自訂的 Dialog 取代 showDatePicker ---
-  Future<void> _pickDate() async {
-    DateTime? pickedDate = _selectedDate;
-    final DateTime? result = await showDialog<DateTime>(
-      context: context,
-      builder: (BuildContext context) {
-        return AlertDialog(
-          shape: RoundedRectangleBorder(
-            borderRadius: BorderRadius.circular(16),
-          ),
-          contentPadding: const EdgeInsets.all(0),
-          content: SizedBox(
-            height: 380, // 調整高度以容納按鈕
-            width: 320,
-            child: Column(
-              children: [
-                Expanded(
-                  child: CalendarDatePicker(
-                    initialDate: _selectedDate,
-                    firstDate: DateTime(2000),
-                    lastDate: DateTime(2101),
-                    onDateChanged: (DateTime date) {
-                      pickedDate = date;
-                    },
-                  ),
-                ),
-                Padding(
-                  padding: const EdgeInsets.only(right: 16.0, bottom: 8.0),
-                  child: Row(
-                    mainAxisAlignment: MainAxisAlignment.end,
-                    children: [
-                      TextButton(
-                        onPressed: () => Navigator.of(context).pop(null),
-                        child: const Text('取消'),
-                      ),
-                      const SizedBox(width: 8),
-                      TextButton(
-                        onPressed: () => Navigator.of(context).pop(pickedDate),
-                        child: const Text('確定'),
-                      ),
-                    ],
-                  ),
-                ),
-              ],
             ),
-          ),
-        );
-      },
-    );
-
-    if (result != null && result != _selectedDate) {
-      setState(() {
-        _selectedDate = result;
-      });
-    }
-  }
-
-  void _showCurrencyPicker() {
-    showModalBottomSheet(
-      context: context,
-      builder: (context) {
-        return SafeArea(
-          child: Wrap(
-            children: _currencies.map((currency) {
+            ...suggestion.plans.map((plan) {
+              final currency = plan.prices.containsKey(_currency)
+                  ? _currency
+                  : suggestion.nativeCurrency;
               return ListTile(
-                title: Text(currency),
+                title: Text(plan.name),
+                trailing: Text(formatAmount(plan.prices[currency]!, currency)),
                 onTap: () {
-                  setState(() {
-                    _selectedCurrency = currency;
-                    if (_selectedPlan != null) {
-                      if (_selectedPlan!.prices.containsKey(currency)) {
-                        _amountController.text = _selectedPlan!
-                            .prices[currency]!
-                            .toStringAsFixed(2)
-                            .replaceAll(RegExp(r'\.00$'), '');
-                      }
-                    }
-                  });
+                  _applySuggestion(suggestion, plan, currency);
                   Navigator.of(context).pop();
                 },
               );
-            }).toList(),
-          ),
-        );
-      },
+            }),
+            Padding(
+              padding: const EdgeInsets.fromLTRB(16, 4, 16, 16),
+              child: Text(
+                '價格僅供參考，請以實際帳單金額為準。',
+                style: TextStyle(color: Colors.grey[600], fontSize: 12),
+              ),
+            ),
+          ],
+        ),
+      ),
     );
   }
 
-  Future<void> _saveSubscription() async {
-    if (_formKey.currentState!.validate()) {
-      setState(() => _isLoading = true);
-
-      final suggestion = popularSuggestions.firstWhere(
-        (s) => s.name == _nameController.text,
-        orElse: () => SubscriptionSuggestion(
-          name: _nameController.text,
-          nativeCurrency: 'TWD',
-          brandColor: Colors.grey,
-          category: SubscriptionCategory.other,
-          plans: [],
+  void _showCurrencyPicker() {
+    showModalBottomSheet<void>(
+      context: context,
+      builder: (context) => SafeArea(
+        child: Wrap(
+          children: SubscriptionLimits.currencies.map((currency) {
+            return ListTile(
+              title: Text(currency),
+              trailing: currency == _currency ? const Icon(Icons.check) : null,
+              onTap: () {
+                setState(() {
+                  _currency = currency;
+                  final price = _selectedPlan?.prices[currency];
+                  if (price != null) {
+                    _amountController.text = amountToInput(price);
+                  }
+                });
+                Navigator.of(context).pop();
+              },
+            );
+          }).toList(),
         ),
-      );
-
-      final newSubscription = Subscription(
-        id: '',
-        name: _nameController.text,
-        plan: _selectedPlan?.name ?? '自訂方案',
-        amount: double.parse(_amountController.text),
-        currency: _selectedCurrency,
-        cycle: _selectedCycle,
-        firstPaymentDate: _selectedDate,
-        brandColor: suggestion.brandColor,
-        category: suggestion.category,
-      );
-
-      try {
-        await _subscriptionService.addSubscription(newSubscription);
-        if (mounted) {
-          Navigator.of(context).pop();
-        }
-      } catch (e) {
-        if (mounted) {
-          ScaffoldMessenger.of(
-            context,
-          ).showSnackBar(const SnackBar(content: Text('儲存失敗，請稍後再試。')));
-          setState(() => _isLoading = false);
-        }
-      }
-    }
+      ),
+    );
   }
 
-  @override
-  Widget build(BuildContext context) {
-    return SingleChildScrollView(
-      child: Padding(
-        padding: EdgeInsets.only(
-          bottom: MediaQuery.of(context).viewInsets.bottom,
-          left: 16,
-          right: 16,
-          top: 16,
-        ),
-        child: Form(
-          key: _formKey,
+  /// 不含標頭的日曆對話框。
+  Future<DateTime?> _pickDate(DateTime initial) {
+    DateTime picked = initial;
+    return showDialog<DateTime>(
+      context: context,
+      builder: (context) => AlertDialog(
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+        contentPadding: EdgeInsets.zero,
+        content: SizedBox(
+          height: 380,
+          width: 320,
           child: Column(
-            mainAxisSize: MainAxisSize.min,
-            crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              Center(
-                child: Container(
-                  width: 50,
-                  height: 5,
-                  decoration: BoxDecoration(
-                    color: Colors.grey[300],
-                    borderRadius: BorderRadius.circular(2.5),
-                  ),
+              Expanded(
+                child: CalendarDatePicker(
+                  initialDate: initial,
+                  firstDate: DateTime(2000),
+                  lastDate: DateTime(DateTime.now().year + 5, 12, 31),
+                  onDateChanged: (d) => picked = d,
                 ),
               ),
-              const SizedBox(height: 24),
-              Text(
-                '新增訂閱項目',
-                style: Theme.of(context).textTheme.headlineSmall?.copyWith(
-                  color: const Color(0xFF1A237E),
-                  fontWeight: FontWeight.bold,
-                ),
-              ),
-              const SizedBox(height: 16),
-
-              _buildSuggestionsSection(),
-
-              const SizedBox(height: 20),
-              _buildTextField(
-                controller: _nameController,
-                label: '服務名稱',
-                hint: '例如：YouTube Premium',
-                validator: (value) =>
-                    value == null || value.isEmpty ? '請輸入服務名稱' : null,
-                keyboardType: TextInputType.text,
-              ),
-              const SizedBox(height: 12),
-              _buildAmountField(),
-              const SizedBox(height: 12),
-              _buildCycleSelector(),
-              const SizedBox(height: 12),
-              _buildDatePicker(),
-              const SizedBox(height: 24),
-              SizedBox(
-                width: double.infinity,
-                child: ElevatedButton(
-                  onPressed: _isLoading ? null : _saveSubscription,
-                  style: ElevatedButton.styleFrom(
-                    padding: const EdgeInsets.symmetric(vertical: 16),
-                    shape: RoundedRectangleBorder(
-                      borderRadius: BorderRadius.circular(16),
+              Padding(
+                padding: const EdgeInsets.only(right: 16, bottom: 8),
+                child: Row(
+                  mainAxisAlignment: MainAxisAlignment.end,
+                  children: [
+                    TextButton(
+                      onPressed: () => Navigator.of(context).pop(),
+                      child: const Text('取消'),
                     ),
-                  ),
-                  child: _isLoading
-                      ? const SizedBox(
-                          height: 24,
-                          width: 24,
-                          child: CircularProgressIndicator(
-                            color: Colors.white,
-                            strokeWidth: 3,
-                          ),
-                        )
-                      : const Text(
-                          '儲存訂閱',
-                          style: TextStyle(
-                            fontSize: 18,
-                            fontWeight: FontWeight.bold,
-                          ),
-                        ),
+                    const SizedBox(width: 8),
+                    TextButton(
+                      onPressed: () => Navigator.of(context).pop(picked),
+                      child: const Text('確定'),
+                    ),
+                  ],
                 ),
               ),
-              const SizedBox(height: 8),
             ],
           ),
         ),
@@ -468,143 +194,340 @@ class _AddSubscriptionPageState extends State<AddSubscriptionPage> {
     );
   }
 
-  Widget _buildSuggestionsSection() {
-    final filteredSuggestions = popularSuggestions
-        .where((s) => s.category == _selectedCategory)
-        .toList();
+  // ------------------------------------------------------------ 儲存 / 刪除
 
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        const Text(
-          '或從常用服務快速新增',
-          style: TextStyle(
-            fontWeight: FontWeight.w500,
-            color: Color(0xFF4b5563),
-          ),
+  Future<void> _save() async {
+    if (!_formKey.currentState!.validate()) return;
+    if (_isEnded && !_endDate.isAfter(_firstPaymentDate)) {
+      _showMessage('停止續訂日必須晚於首次付款日。');
+      return;
+    }
+
+    final name = _nameController.text.trim();
+    final plan = _planController.text.trim();
+    final suggestion = _matchSuggestion(name);
+    final existing = widget.existing;
+    final Color brandColor;
+    if (suggestion != null) {
+      brandColor = suggestion.brandColor;
+    } else if (existing != null && existing.name == name) {
+      brandColor = existing.brandColor;
+    } else {
+      brandColor = _category.color;
+    }
+
+    final sub = Subscription(
+      id: existing?.id ?? '',
+      name: name,
+      plan: plan.isEmpty ? '自訂方案' : plan,
+      amount: double.parse(_amountController.text.trim()),
+      currency: _currency,
+      cycle: _cycle,
+      firstPaymentDate: _firstPaymentDate,
+      endDate: _isEnded ? _endDate : null,
+      brandColor: brandColor,
+      category: _category,
+    );
+
+    setState(() => _isSaving = true);
+    try {
+      await _service.saveSubscription(sub);
+      if (mounted) Navigator.of(context).pop();
+    } on FirebaseException catch (e) {
+      debugPrint('儲存訂閱失敗：${e.code}');
+      _showMessage('儲存失敗，請稍後再試。');
+    } catch (e) {
+      debugPrint('儲存訂閱失敗：$e');
+      _showMessage('儲存失敗，請稍後再試。');
+    } finally {
+      if (mounted) setState(() => _isSaving = false);
+    }
+  }
+
+  Future<void> _delete() async {
+    final existing = widget.existing;
+    if (existing == null) return;
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: const Text('刪除訂閱'),
+        content: Text(
+          '確定要刪除「${existing.name}」嗎？刪除後無法復原，相關的統計紀錄也會一併消失。\n\n'
+          '如果只是不再續訂，建議改用「已停止訂閱」，保留過去的支出紀錄。',
         ),
-        const SizedBox(height: 8),
-        SizedBox(
-          height: 40,
-          child: ListView.separated(
-            scrollDirection: Axis.horizontal,
-            itemCount: SubscriptionCategory.values.length,
-            separatorBuilder: (context, index) => const SizedBox(width: 8),
-            itemBuilder: (context, index) {
-              final category = SubscriptionCategory.values[index];
-              final isSelected = category == _selectedCategory;
-              return ChoiceChip(
-                label: Text(category.displayName),
-                selected: isSelected,
-                onSelected: (selected) {
-                  if (selected) {
-                    setState(() {
-                      _selectedCategory = category;
-                    });
-                  }
-                },
-                showCheckmark: false,
-              );
-            },
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(context).pop(false),
+            child: const Text('取消'),
           ),
-        ),
-        const SizedBox(height: 12),
-        SizedBox(
-          height: (80 * 2) + 12,
-          child: GridView.builder(
-            gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
-              crossAxisCount: 3,
-              crossAxisSpacing: 12,
-              mainAxisSpacing: 12,
-              childAspectRatio: 100 / 80,
-            ),
-            itemCount: filteredSuggestions.length,
-            itemBuilder: (context, index) {
-              final suggestion = filteredSuggestions[index];
-              return InkWell(
-                onTap: () => _showPlanPicker(suggestion),
-                borderRadius: BorderRadius.circular(12),
-                child: Container(
-                  padding: const EdgeInsets.symmetric(
-                    vertical: 8.0,
-                    horizontal: 4.0,
-                  ),
-                  decoration: BoxDecoration(
-                    color: Colors.white,
-                    borderRadius: BorderRadius.circular(12),
-                    border: Border.all(color: Colors.grey[300]!),
-                  ),
-                  child: Column(
-                    mainAxisAlignment: MainAxisAlignment.center,
-                    children: [
-                      Container(
-                        width: 40,
-                        height: 40,
-                        decoration: BoxDecoration(
-                          color: suggestion.brandColor,
-                          borderRadius: BorderRadius.circular(8),
-                        ),
-                        child: Center(
-                          child: Text(
-                            suggestion.name.substring(0, 1),
-                            style: const TextStyle(
-                              color: Colors.white,
-                              fontWeight: FontWeight.bold,
-                              fontSize: 20,
-                            ),
-                          ),
-                        ),
-                      ),
-                      const SizedBox(height: 4),
-                      Text(
-                        suggestion.name,
-                        style: const TextStyle(
-                          fontWeight: FontWeight.bold,
-                          fontSize: 12,
-                        ),
-                        overflow: TextOverflow.ellipsis,
-                      ),
-                    ],
-                  ),
-                ),
-              );
-            },
+          TextButton(
+            onPressed: () => Navigator.of(context).pop(true),
+            style: TextButton.styleFrom(foregroundColor: Colors.red),
+            child: const Text('刪除'),
           ),
-        ),
-      ],
+        ],
+      ),
+    );
+    if (confirmed != true) return;
+    setState(() => _isSaving = true);
+    try {
+      await _service.deleteSubscription(existing.id);
+      if (mounted) Navigator.of(context).pop();
+    } catch (e) {
+      debugPrint('刪除訂閱失敗：$e');
+      _showMessage('刪除失敗，請稍後再試。');
+      if (mounted) setState(() => _isSaving = false);
+    }
+  }
+
+  /// 這個頁面顯示在底部彈出視窗裡，SnackBar 會被遮住，所以用對話框提示。
+  void _showMessage(String text) {
+    if (!mounted) return;
+    showDialog<void>(
+      context: context,
+      builder: (context) => AlertDialog(
+        content: Text(text),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(context).pop(),
+            child: const Text('確定'),
+          ),
+        ],
+      ),
     );
   }
 
-  Widget _buildTextField({
-    required TextEditingController controller,
-    required String label,
-    required String hint,
-    String? Function(String?)? validator,
-    TextInputType? keyboardType,
-  }) {
+  // ------------------------------------------------------------ 畫面
+
+  @override
+  Widget build(BuildContext context) {
+    return SingleChildScrollView(
+      padding: EdgeInsets.only(
+        bottom: MediaQuery.of(context).viewInsets.bottom + 16,
+        left: 16,
+        right: 16,
+        top: 16,
+      ),
+      child: Form(
+        key: _formKey,
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Center(
+              child: Container(
+                width: 50,
+                height: 5,
+                decoration: BoxDecoration(
+                  color: Colors.grey[300],
+                  borderRadius: BorderRadius.circular(2.5),
+                ),
+              ),
+            ),
+            const SizedBox(height: 24),
+            Text(
+              _isEditing ? '編輯訂閱項目' : '新增訂閱項目',
+              style: Theme.of(context).textTheme.headlineSmall?.copyWith(
+                color: const Color(0xFF1A237E),
+                fontWeight: FontWeight.bold,
+              ),
+            ),
+            const SizedBox(height: 16),
+            _label('分類'),
+            _buildCategoryChips(),
+            if (!_isEditing) ...[
+              const SizedBox(height: 12),
+              _buildSuggestions(),
+            ],
+            const SizedBox(height: 20),
+            _label('服務名稱'),
+            TextFormField(
+              controller: _nameController,
+              maxLength: SubscriptionLimits.maxNameLength,
+              textInputAction: TextInputAction.next,
+              decoration: _decoration(hint: '例如：YouTube'),
+              validator: (v) =>
+                  (v == null || v.trim().isEmpty) ? '請輸入服務名稱' : null,
+            ),
+            _label('方案名稱（選填）'),
+            TextFormField(
+              controller: _planController,
+              maxLength: SubscriptionLimits.maxPlanLength,
+              textInputAction: TextInputAction.next,
+              decoration: _decoration(hint: '例如：Premium 個人'),
+            ),
+            _buildAmountField(),
+            const SizedBox(height: 12),
+            _buildCycleSelector(),
+            const SizedBox(height: 16),
+            _label('首次付款日'),
+            _dateField(_firstPaymentDate, () async {
+              final d = await _pickDate(_firstPaymentDate);
+              if (d != null) setState(() => _firstPaymentDate = dateOnly(d));
+            }),
+            const SizedBox(height: 8),
+            SwitchListTile(
+              contentPadding: EdgeInsets.zero,
+              title: const Text('已停止訂閱'),
+              subtitle: const Text('保留過去的支出紀錄，之後不再計算扣款'),
+              value: _isEnded,
+              onChanged: (v) => setState(() => _isEnded = v),
+            ),
+            if (_isEnded) ...[
+              _label('停止續訂日（此日起不再扣款）'),
+              _dateField(_endDate, () async {
+                final d = await _pickDate(_endDate);
+                if (d != null) setState(() => _endDate = dateOnly(d));
+              }),
+            ],
+            const SizedBox(height: 24),
+            SizedBox(
+              width: double.infinity,
+              child: ElevatedButton(
+                onPressed: _isSaving ? null : _save,
+                style: ElevatedButton.styleFrom(
+                  padding: const EdgeInsets.symmetric(vertical: 16),
+                  shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(16),
+                  ),
+                ),
+                child: _isSaving
+                    ? const SizedBox(
+                        height: 24,
+                        width: 24,
+                        child: CircularProgressIndicator(
+                          color: Colors.white,
+                          strokeWidth: 3,
+                        ),
+                      )
+                    : Text(
+                        _isEditing ? '儲存變更' : '儲存訂閱',
+                        style: const TextStyle(
+                          fontSize: 18,
+                          fontWeight: FontWeight.bold,
+                        ),
+                      ),
+              ),
+            ),
+            if (_isEditing) ...[
+              const SizedBox(height: 8),
+              Center(
+                child: TextButton.icon(
+                  onPressed: _isSaving ? null : _delete,
+                  icon: const Icon(Icons.delete_outline),
+                  label: const Text('刪除此訂閱'),
+                  style: TextButton.styleFrom(foregroundColor: Colors.red),
+                ),
+              ),
+            ],
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _label(String text) => Padding(
+    padding: const EdgeInsets.only(bottom: 8),
+    child: Text(
+      text,
+      style: const TextStyle(
+        fontWeight: FontWeight.w500,
+        color: Color(0xFF4B5563),
+      ),
+    ),
+  );
+
+  InputDecoration _decoration({String? hint, Widget? suffixIcon}) =>
+      InputDecoration(
+        hintText: hint,
+        suffixIcon: suffixIcon,
+        border: OutlineInputBorder(borderRadius: BorderRadius.circular(12)),
+        contentPadding: const EdgeInsets.symmetric(
+          horizontal: 16,
+          vertical: 12,
+        ),
+      );
+
+  Widget _buildCategoryChips() {
+    return SizedBox(
+      height: 40,
+      child: ListView.separated(
+        scrollDirection: Axis.horizontal,
+        itemCount: SubscriptionCategory.values.length,
+        separatorBuilder: (_, _) => const SizedBox(width: 8),
+        itemBuilder: (context, index) {
+          final category = SubscriptionCategory.values[index];
+          return ChoiceChip(
+            label: Text(category.displayName),
+            selected: category == _category,
+            showCheckmark: false,
+            onSelected: (selected) {
+              if (selected) setState(() => _category = category);
+            },
+          );
+        },
+      ),
+    );
+  }
+
+  Widget _buildSuggestions() {
+    final items = popularSuggestions
+        .where((s) => s.category == _category)
+        .toList();
+    if (items.isEmpty) {
+      return Text(
+        '此分類沒有常用服務，請直接在下方輸入。',
+        style: TextStyle(color: Colors.grey[600]),
+      );
+    }
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
         Text(
-          label,
-          style: const TextStyle(
-            fontWeight: FontWeight.w500,
-            color: Color(0xFF4b5563),
-          ),
+          '從常用服務快速新增（價格僅供參考）',
+          style: TextStyle(color: Colors.grey[600], fontSize: 13),
         ),
         const SizedBox(height: 8),
-        TextFormField(
-          controller: controller,
-          validator: validator,
-          keyboardType: keyboardType,
-          decoration: InputDecoration(
-            hintText: hint,
-            border: OutlineInputBorder(borderRadius: BorderRadius.circular(12)),
-            contentPadding: const EdgeInsets.symmetric(
-              horizontal: 16,
-              vertical: 12,
-            ),
+        GridView.builder(
+          shrinkWrap: true,
+          physics: const NeverScrollableScrollPhysics(),
+          gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
+            crossAxisCount: 3,
+            crossAxisSpacing: 12,
+            mainAxisSpacing: 12,
+            childAspectRatio: 100 / 80,
           ),
+          itemCount: items.length,
+          itemBuilder: (context, index) {
+            final s = items[index];
+            return InkWell(
+              onTap: () => _showPlanPicker(s),
+              borderRadius: BorderRadius.circular(12),
+              child: Container(
+                padding: const EdgeInsets.symmetric(vertical: 8, horizontal: 4),
+                decoration: BoxDecoration(
+                  color: Colors.white,
+                  borderRadius: BorderRadius.circular(12),
+                  border: Border.all(color: Colors.grey[300]!),
+                ),
+                child: Column(
+                  mainAxisAlignment: MainAxisAlignment.center,
+                  children: [
+                    BrandIcon(name: s.name, color: s.brandColor, size: 40),
+                    const SizedBox(height: 4),
+                    Text(
+                      s.name,
+                      style: const TextStyle(
+                        fontWeight: FontWeight.bold,
+                        fontSize: 12,
+                      ),
+                      overflow: TextOverflow.ellipsis,
+                    ),
+                  ],
+                ),
+              ),
+            );
+          },
         ),
       ],
     );
@@ -614,26 +537,24 @@ class _AddSubscriptionPageState extends State<AddSubscriptionPage> {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        const Text(
-          '金額',
-          style: TextStyle(
-            fontWeight: FontWeight.w500,
-            color: Color(0xFF4b5563),
-          ),
-        ),
-        const SizedBox(height: 8),
+        _label('金額'),
         TextFormField(
           controller: _amountController,
+          keyboardType: const TextInputType.numberWithOptions(decimal: true),
+          inputFormatters: [
+            FilteringTextInputFormatter.allow(RegExp(r'^\d*\.?\d{0,2}')),
+          ],
           validator: (value) {
-            if (value == null || value.isEmpty) return '請輸入金額';
-            if (double.tryParse(value) == null) return '請輸入有效的數字';
+            final v = double.tryParse(value?.trim() ?? '');
+            if (v == null) return '請輸入有效的金額';
+            if (v <= 0) return '金額必須大於 0';
+            if (v > SubscriptionLimits.maxAmount) return '金額過大';
             return null;
           },
-          keyboardType: const TextInputType.numberWithOptions(decimal: true),
-          decoration: InputDecoration(
-            hintText: '390',
+          decoration: _decoration(
+            hint: '390',
             suffixIcon: Padding(
-              padding: const EdgeInsets.only(right: 8.0),
+              padding: const EdgeInsets.only(right: 8),
               child: InkWell(
                 onTap: _showCurrencyPicker,
                 borderRadius: BorderRadius.circular(12),
@@ -642,7 +563,7 @@ class _AddSubscriptionPageState extends State<AddSubscriptionPage> {
                     mainAxisSize: MainAxisSize.min,
                     children: [
                       Text(
-                        _selectedCurrency,
+                        _currency,
                         style: const TextStyle(fontWeight: FontWeight.bold),
                       ),
                       const Icon(Icons.arrow_drop_down, size: 18),
@@ -650,11 +571,6 @@ class _AddSubscriptionPageState extends State<AddSubscriptionPage> {
                   ),
                 ),
               ),
-            ),
-            border: OutlineInputBorder(borderRadius: BorderRadius.circular(12)),
-            contentPadding: const EdgeInsets.symmetric(
-              horizontal: 16,
-              vertical: 12,
             ),
           ),
         ),
@@ -666,72 +582,45 @@ class _AddSubscriptionPageState extends State<AddSubscriptionPage> {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        const Text(
-          '付款週期',
-          style: TextStyle(
-            fontWeight: FontWeight.w500,
-            color: Color(0xFF4b5563),
-          ),
-        ),
-        const SizedBox(height: 8),
+        _label('付款週期'),
         SizedBox(
           width: double.infinity,
-          child: ToggleButtons(
-            isSelected: [
-              _selectedCycle == BillingCycle.monthly,
-              _selectedCycle == BillingCycle.quarterly,
-              _selectedCycle == BillingCycle.yearly,
-            ],
-            onPressed: (index) {
-              setState(() {
-                _selectedCycle = BillingCycle.values[index];
-              });
-            },
-            borderRadius: BorderRadius.circular(12),
-            constraints: BoxConstraints(
-              minHeight: 40.0,
-              minWidth: (MediaQuery.of(context).size.width - 48) / 3,
-            ),
-            children: const [Text('每月'), Text('每季'), Text('每年')],
+          child: SegmentedButton<BillingCycle>(
+            segments: BillingCycle.values
+                .map(
+                  (c) => ButtonSegment<BillingCycle>(
+                    value: c,
+                    label: Text(c.displayName),
+                  ),
+                )
+                .toList(),
+            selected: {_cycle},
+            showSelectedIcon: false,
+            onSelectionChanged: (s) => setState(() => _cycle = s.first),
           ),
         ),
       ],
     );
   }
 
-  Widget _buildDatePicker() {
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        const Text(
-          '首次付款日',
-          style: TextStyle(
-            fontWeight: FontWeight.w500,
-            color: Color(0xFF4b5563),
-          ),
+  Widget _dateField(DateTime date, VoidCallback onTap) {
+    return InkWell(
+      onTap: onTap,
+      borderRadius: BorderRadius.circular(12),
+      child: Container(
+        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+        decoration: BoxDecoration(
+          border: Border.all(color: Colors.grey[400]!),
+          borderRadius: BorderRadius.circular(12),
         ),
-        const SizedBox(height: 8),
-        InkWell(
-          onTap: _pickDate,
-          child: Container(
-            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
-            decoration: BoxDecoration(
-              border: Border.all(color: Colors.grey[400]!),
-              borderRadius: BorderRadius.circular(12),
-            ),
-            child: Row(
-              mainAxisAlignment: MainAxisAlignment.spaceBetween,
-              children: [
-                Text(
-                  DateFormat('yyyy / MM / dd').format(_selectedDate),
-                  style: const TextStyle(fontSize: 16),
-                ),
-                const Icon(Icons.calendar_today),
-              ],
-            ),
-          ),
+        child: Row(
+          mainAxisAlignment: MainAxisAlignment.spaceBetween,
+          children: [
+            Text(formatDate(date), style: const TextStyle(fontSize: 16)),
+            const Icon(Icons.calendar_today),
+          ],
         ),
-      ],
+      ),
     );
   }
 }
