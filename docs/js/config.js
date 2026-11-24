@@ -6,12 +6,12 @@
 // apiKey 留空時，app 只能用訪客模式（資料只存在這台裝置的瀏覽器裡）。
 // ============================================================================
 export const FIREBASE_CONFIG = {
-  apiKey: '',
+  apiKey: 'AIzaSyBV8Q_zdiJNT6Wec_hxxpFdXjxFmshWEys',
   authDomain: 'sub-tracker-982e6.firebaseapp.com',
   projectId: 'sub-tracker-982e6',
   storageBucket: 'sub-tracker-982e6.firebasestorage.app',
   messagingSenderId: '1050375587944',
-  appId: '',
+  appId: '1:1050375587944:web:16f9d6aa9f41f8ef1e93dd',
 };
 
 export const APP_NAME = '訂閱管家';

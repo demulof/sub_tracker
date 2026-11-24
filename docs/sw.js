@@ -1,7 +1,7 @@
 // Service Worker：把 app 本身的檔案存在手機上，沒有網路也能開啟。
 // 策略：先用快取的版本（開啟很快），同時在背景下載新版，下次開啟就是新版。
 // 修改檔案清單時記得把 VERSION 加 1，讓舊快取被清掉。
-const VERSION = 'v1';
+const VERSION = 'v2';
 const CACHE = `sub-tracker-${VERSION}`;
 const SHELL = [
   './',
