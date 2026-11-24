@@ -1,0 +1,13 @@
+{
+  "name": "sub-tracker-pwa-tools",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "build": "esbuild firebase-entry.js --bundle --format=esm --minify --target=es2020 --legal-comments=external --outfile=../docs/vendor/firebase.js",
+    "test": "node --test test/*.test.mjs"
+  },
+  "devDependencies": {
+    "esbuild": "^0.25.0",
+    "firebase": "13.4.0"
+  }
+}

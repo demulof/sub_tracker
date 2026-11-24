@@ -1,5 +1,43 @@
 # 訂閱管家（sub_tracker）
 
+> **網頁版（PWA）**：`docs/` 資料夾是可以直接安裝到手機主畫面的網頁版，不需要上架。
+> 設定方式見下方「網頁版（PWA）」一節。Flutter 版的程式碼保留在 `lib/`。
+
+## 網頁版（PWA）
+
+不需要建置工具，`docs/` 裡的檔案就是完整的網站，用 GitHub Pages 發布即可。
+
+### 功能
+- 儀表板、新增／編輯／停止／刪除訂閱、統計分析（與 Flutter 版相同的計算規則）。
+- 多幣別自動換算、訂閱數量不限。
+- **行事曆提醒**：匯出 .ics 檔加入手機行事曆，扣款前一天早上 9 點提醒（網頁版沒有伺服器可以發推播，用行事曆最穩定）。
+- **備份**：匯出／匯入 JSON 檔。
+- 沒有網路也能開啟（Service Worker 快取）。
+- 登入後資料存在 Firebase，與 Flutter 版共用同一份資料；不登入時資料只存在這台裝置的瀏覽器。
+
+### 第一次設定
+1. **開啟 GitHub Pages**：GitHub repo → Settings → Pages → Source 選「Deploy from a branch」→ 分支選 `pwa`（或合併後的 `main`）、資料夾選 `/docs` → Save。
+   約 1 分鐘後網址會是 `https://demulof.github.io/sub_tracker/`。
+2. **註冊 Firebase 網頁應用程式**（要同步資料才需要；只用訪客模式可以跳過）：
+   1. Firebase 主控台 → 專案設定 → 一般 → 你的應用程式 →「新增應用程式」→ 選「網頁」（`</>` 圖示）。
+   2. 暱稱填「訂閱管家 網頁版」，**不用**勾選 Firebase Hosting → 註冊。
+   3. 畫面上會出現 `firebaseConfig`，把 `apiKey` 和 `appId` 填進 `docs/js/config.js`（其他欄位已填好，若不同也一併更新）。
+3. **把網址加入授權網域**：Firebase 主控台 → Authentication → 設定 → 授權網域 → 新增 `demulof.github.io`。
+4. **部署安全規則**：見下方「部署 Firestore 安全規則」。
+5. **限制網頁版 API 金鑰**：Google Cloud 主控台 → API 和服務 → 憑證 → 「Browser key (auto created by Firebase)」→
+   應用程式限制選「網站」，加入 `https://demulof.github.io/*`。
+
+### 安裝到 iPhone 主畫面
+用 **Safari** 開啟網址 → 下方「分享」→「加入主畫面」。主畫面版本和 Safari 的資料是分開的，安裝後要重新登入一次。
+
+### 修改與更新
+- 改完 `docs/` 的檔案推上 GitHub，Pages 會自動更新。
+- **有新增或改名檔案時**，要更新 `docs/sw.js` 的檔案清單，並把 `VERSION` 加 1。
+- 已安裝的手機會在開啟時於背景下載新版，下一次開啟才會套用。
+- 計算邏輯的測試：`cd pwa-tools && npm install && npm test`。
+- Firebase 套件已打包在 `docs/vendor/firebase.js`；要升級時改 `pwa-tools/package.json` 的版本後執行 `npm run build`。
+
+
 記錄各項訂閱服務、提醒即將扣款日，並統計每月與每年支出的 Flutter app。
 
 ## 功能
